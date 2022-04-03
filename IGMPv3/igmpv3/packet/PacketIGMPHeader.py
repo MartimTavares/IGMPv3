@@ -49,6 +49,10 @@ class PacketIGMPHeader(PacketPayload):
         """
         return self.maxResponseTime
 
+###########################################################################
+#############                 IGMP HEADER                     #############
+#############                QUERY MESSAGE                    #############
+###########################################################################
 
 class PacketIGMPHeaderQuery(PacketIGMPHeader):
     '''
@@ -79,7 +83,7 @@ class PacketIGMPHeaderQuery(PacketIGMPHeader):
         """
         Get IGMP type of packet
         """
-        return super().getIgmpMaxTime()
+        return super().getIgmpType()
 
     def getMaxCode(self):
         """
@@ -87,8 +91,8 @@ class PacketIGMPHeaderQuery(PacketIGMPHeader):
         """
         return super().getIgmpMaxTime()
 
-    #------------------------------- Turning packet into a bus of bytes -------------------------------
-    #------------------------------- and turning bytes into data object -------------------------------
+    #------------------- Turning packet into a bus of bytes -----------------
+    #------------------- and turning bytes into data object -----------------
     
     def bytes(self) -> bytes:
         """
@@ -147,7 +151,77 @@ class PacketIGMPHeaderQuery(PacketIGMPHeader):
         return packet
 
 
-
+###########################################################################
+#############                 IGMP HEADER                     #############
+#############                REPORT MESSAGE                   #############
+###########################################################################
 
 class PacketIGMPHeaderReport(PacketIGMPHeader):
+    """
+     0                   1                   2                   3
+     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |  Type = 0x22  |    Reserved   |           Checksum            |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |           Reserved            |  Number of Group Records (M)  |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    """
+
+    IGMP_HDR_R = "! BB H H H"
+    IGMP_HDR_R_LEN = struct.calcsize(IGMP_HDR_R)
+
+    def __init__(self, typeMessage: int, reserved1: int, reserved2: int, groupRecords: int):
+        super().__init__(typeMessage, reserved1)
+        self.reserved = reserved2
+        self.groupRecords = groupRecords
     
+    def getIgmpType(self):
+        """
+        Get IGMP type of packet
+        """
+        return super().getIgmpType()
+
+    def getReserved(self):
+        """
+        Get IGMP max time code
+        """
+        return super().getIgmpMaxTime()
+
+    #------------------- Turning packet into a bus of bytes -----------------
+    #------------------- and turning bytes into data object -----------------
+
+    def bytes(self) -> bytes:
+        """
+        Obtain packet in byte format
+        """
+
+        # get the message and obtain its checksum 
+        msgWithoutChecksum = struct.pack(PacketIGMPHeaderReport.IGMP_HDR_R, self.getIgmpType(), self.getReserved(), 0,
+                                          self.reserved, self.groupRecords)
+        igmpChecksum = checksum(msgWithoutChecksum)
+        msg = msgWithoutChecksum[0:2] + struct.pack("! H", igmpChecksum) + msgWithoutChecksum[4:]
+        return msg
+
+    @staticmethod
+    def parse_bytes(data: bytes):
+        """
+        From bytes parse and obtain the IGMP Header object and all its payload
+        """
+        #Filter the data to get only the IGMP Report header
+        header = data[0:PacketIGMPHeaderReport.IGMP_HDR_R_LEN]
+        (type, reserved1, rcvChecksum, reserved2, numberOfRecords) = struct.unpack(PacketIGMPHeaderReport.IGMP_HDR_R, header)
+
+        #Checking if the packet contains the entire message through the checksum option
+        msgToChecksum = data[0:2] + b'\x00\x00' + data[4:]
+        if checksum(msgToChecksum) != rcvChecksum:
+            #print("wrong checksum")
+            raise Exception("[ERROR]: Wrong Checksum. The packet may be damaged.")
+        """
+        'TYPE': type,
+        'RESERVED': reserved1, 
+        'CHECKSUM': rcvChecksum, 
+        'RESERVED': reserved2, 
+        'GROUPS': numberOfRecords
+        """
+        packet = PacketIGMPHeaderReport(type, reserved1, reserved2, numberOfRecords)
+        return packet
