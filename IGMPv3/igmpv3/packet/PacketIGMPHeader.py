@@ -1,7 +1,10 @@
 import socket
 import struct
-from igmpv3.packet.PacketPayload import PacketPayload
-from igmpv3.utils import checksum
+from PacketGroupRecord import PacketGroupRecord
+from PacketIGMPv3HeaderQuery import PacketIGMPv3HeaderQuery
+from PacketIGMPv3HeaderReport import PacketIGMPv3HeaderReport
+from PacketPayload import PacketPayload
+#from igmpv3.utils import checksum
 
 
 class PacketIGMPHeader(PacketPayload):
@@ -13,215 +16,90 @@ class PacketIGMPHeader(PacketPayload):
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     '''
 
-    IGMP_TYPE = 3
+    IGMP_VERSION = 3
 
-    IGMP_HDR_1 = "! BB H"
-    IGMP_HDR_1_LEN = struct.calcsize(IGMP_HDR_1)
+    IGMP_HDR = "! BB H"
+    IGMP_HDR_LEN = struct.calcsize(IGMP_HDR)
 
-    #IGMP3_SRC_ADDR_HDR = "! BB H "
-    #IGMP3_SRC_ADDR_HDR_LEN = struct.calcsize(IGMP3_SRC_ADDR_HDR)
+    IGMP_MSG_TYPES = {0x11: PacketIGMPv3HeaderQuery,
+                      0x22: PacketIGMPv3HeaderReport,
+                      #0x12: PacketIGMPv1Report,
+                      #0x16: PacketIGMPv2Report,
+                      #0x17: PacketIGMPv2LeaveGroup
+                      }
 
-    #IPv4_HDR = "! 4s"
-    #IPv4_HDR_LEN = struct.calcsize(IPv4_HDR)
 
-    MEMBERSHIP_QUERY = 0x11
-    VERSION_3_MEMBERSHIP_REPORT = 0x22
-    
-    #MUST SUPPORT OLDER VERSIONS
-    VERSION_1_MEMBERSHIP_REPORT = 0x12
-    VERSION_2_MEMBERSHIP_REPORT = 0x16
-    VERSION_2_LEAVE_GROUP = 0x17
-
-    def __init__(self, typeMessage: int, maxResponseTime: int):
-        self.type = typeMessage
-        self.maxResponseTime = maxResponseTime
+    def __init__(self, payload):
+        self.payload = payload
     
 
     def getIgmpType(self):
         """
         Get IGMP type of packet
         """
-        return self.type
+        return self.payload.IGMP_TYPE
     
+
     def getIgmpMaxTime(self):
         """
         Get IGMP max response code of packet
         """
-        return self.maxResponseTime
+        return self.payload.MAX_TIME
 
-###########################################################################
-#############                 IGMP HEADER                     #############
-#############                QUERY MESSAGE                    #############
-###########################################################################
 
-class PacketIGMPHeaderQuery(PacketIGMPHeader):
-    '''
-     0                   1                   2                   3
-     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    |      Type     | Max Resp Code |           Checksum            |
-    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    |                         Group Adress                          |
-    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    |  Resv |S| QRV |     QQIC      |    Number of Sources (N)      |
-    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    '''
-
-    IGMP_HDR_Q = "! BB H 4s BB H"
-    IGMP_HDR_Q_LEN = struct.calcsize(IGMP_HDR_Q)
-
-    def __init__(self, typeMessage: int, maxResponseTime: int, resv: int, s: int, qrv: int, qqic: int, numberOfSources: int, groupIP: str = "0.0.0.0"):
-        super().__init__(typeMessage, maxResponseTime)
-        self.groupAddress = groupIP
-        self.resv = resv
-        self.s = s
-        self.qrv = qrv
-        self.qqic = qqic
-        self.numberOfSources = numberOfSources
-
-    def getIgmpType(self):
-        """
-        Get IGMP type of packet
-        """
-        return super().getIgmpType()
-
-    def getMaxCode(self):
-        """
-        Get IGMP max time code
-        """
-        return super().getIgmpMaxTime()
-
-    #------------------- Turning packet into a bus of bytes -----------------
-    #------------------- and turning bytes into data object -----------------
-    
     def bytes(self) -> bytes:
-        """
-        Obtain packet in byte format
-        """
-        #example of input: self.resv = 0b10101001
-        aux1 = self.resv << 4
-        aux2 = self.s << 3
-        resvSQrv = aux1 + aux2 + self.qrv
-        
-        
-        # get the message and obtain its checksum 
-        msgWithoutChecksum = struct.pack(PacketIGMPHeaderQuery.IGMP_HDR_Q, self.getIgmpType(), self.getIgmpMaxTime, 0,
-                                          socket.inet_aton(self.groupAddress), resvSQrv, self.qqic, self.numberOfSources)
-        igmpChecksum = checksum(msgWithoutChecksum)
-        msg = msgWithoutChecksum[0:2] + struct.pack("! H", igmpChecksum) + msgWithoutChecksum[4:]
+        msg_without_checksum = struct.pack(PacketIGMPHeader.IGMP_HDR, self.getIgmpType(), self.getIgmpMaxTime(), 0)
+        msg_without_checksum += self.payload.bytes()
+        igmp_checksum = checksum(msg_without_checksum)
+        msg = msg_without_checksum[0:2] + struct.pack("! H", igmp_checksum) + msg_without_checksum[4:]
         return msg
-    
+
     def __len__(self):
         return len(self.bytes())
-    
+
+
     @staticmethod
     def parse_bytes(data: bytes):
-        """
-        From bytes parse and obtain the IGMP Header object and all its payload
-        """
-        #Filter the data to get only the IGMP Query header
-        header = data[0:PacketIGMPHeaderQuery.IGMP_HDR_Q_LEN]
-        (type, maxTime, rcvChecksum, groupAddress, resvSQrv, qqic, totalSources) = struct.unpack(PacketIGMPHeaderQuery.IGMP_HDR_Q, header)
+        print("parseIGMPHdr: ", data)
 
-        #Checking if the packet contains the entire message through the checksum option
-        msgToChecksum = data[0:2] + b'\x00\x00' + data[4:]
-        if checksum(msgToChecksum) != rcvChecksum:
-            #print("wrong checksum")
-            raise Exception("[ERROR]: Wrong Checksum. The packet may be damaged.")
+        header = data[0:PacketIGMPHeader.IGMP_HDR_LEN]
+        (type, maxTime, rcv_checksum) = struct.unpack(PacketIGMPHeader.IGMP_HDR, header)
 
-        """
-        'TYPE': type,
-        'MAXRESPTIME': maxTime, 
-        'CHECKSUM': rcvChecksum, 
-        'GROUPADDRESS': socket.inet_ntoa(groupAddress), 
-        'RESV': resv,
-        'S': s,
-        'QRV': qrv, 
-        'QQIC': qqic, 
-        'SOURCES': totalSources
-        """
-
-        resv = (resvSQrv & 0xF0) >> 4
-        s = (resvSQrv & 0x08) >> 3
-        qrv = (resvSQrv & 0x07)
-
-        groupAddress = socket.inet_ntoa(groupAddress)
+        msg_to_checksum = data[0:2] + b'\x00\x00' + data[4:]
+        if checksum(msg_to_checksum) != rcv_checksum:
+            print("[ERROR]: Wrong Checksum. The packet may be damaged.")
+            print("[ERROR-INFO]: Checksum calculated at destination: " + str(checksum(msg_to_checksum)))
+            print("[ERROR-INFO]: Checksum parameter received: " + str(rcv_checksum))
+            raise Exception
         
-        packet = PacketIGMPHeaderQuery(type, maxTime, resv, s, qrv, qqic, totalSources, groupAddress)
-        return packet
+        type_ok = False
+        for key in PacketIGMPHeader.IGMP_MSG_TYPES:
+            if type == key:
+                type_ok = True
+        if type_ok == False:
+            print("[ERROR]: Wrong message type.")
+            print("[ERROR-INFO]: The packet does not correspond to an IGMP packet")
+            print("[ERROR-INFO]: Type parameter received: " + str(type))
+            raise Exception
+
+        #STILL NEED TO USE MAX TIME FROM PAYLOAD igmp_payload = PacketIGMPHeader.IGMP_MSG_TYPES[type].IGMP_MAX_TIME[maxTime].parse_bytes(igmp_payload)
+        igmp_payload = data[PacketIGMPHeader.IGMP_HDR_LEN:]
+        igmp_payload = PacketIGMPHeader.IGMP_MSG_TYPES[type].parse_bytes(igmp_payload)
+        return PacketIGMPHeader(igmp_payload)
 
 
-###########################################################################
-#############                 IGMP HEADER                     #############
-#############                REPORT MESSAGE                   #############
-###########################################################################
 
-class PacketIGMPHeaderReport(PacketIGMPHeader):
-    """
-     0                   1                   2                   3
-     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    |  Type = 0x22  |    Reserved   |           Checksum            |
-    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    |           Reserved            |  Number of Group Records (M)  |
-    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    """
-
-    IGMP_HDR_R = "! BB H H H"
-    IGMP_HDR_R_LEN = struct.calcsize(IGMP_HDR_R)
-
-    def __init__(self, typeMessage: int, reserved1: int, reserved2: int, groupRecords: int):
-        super().__init__(typeMessage, reserved1)
-        self.reserved = reserved2
-        self.groupRecords = groupRecords
     
-    def getIgmpType(self):
-        """
-        Get IGMP type of packet
-        """
-        return super().getIgmpType()
+report = PacketIGMPv3HeaderReport(0b1010010100001111)
+gr1 = PacketGroupRecord("CHANGE_TO_INCLUDE_MODE", "127.0.0.1")
+gr2 = PacketGroupRecord("BLOCK_OLD_SOURCES", "224.0.0.1")
+report.addGroupRecord(gr1)
+report.addGroupRecord(gr2)
+print(0x22)
+print(report.IGMP_TYPE)
 
-    def getReserved(self):
-        """
-        Get IGMP max time code
-        """
-        return super().getIgmpMaxTime()
-
-    #------------------- Turning packet into a bus of bytes -----------------
-    #------------------- and turning bytes into data object -----------------
-
-    def bytes(self) -> bytes:
-        """
-        Obtain packet in byte format
-        """
-
-        # get the message and obtain its checksum 
-        msgWithoutChecksum = struct.pack(PacketIGMPHeaderReport.IGMP_HDR_R, self.getIgmpType(), self.getReserved(), 0,
-                                          self.reserved, self.groupRecords)
-        igmpChecksum = checksum(msgWithoutChecksum)
-        msg = msgWithoutChecksum[0:2] + struct.pack("! H", igmpChecksum) + msgWithoutChecksum[4:]
-        return msg
-
-    @staticmethod
-    def parse_bytes(data: bytes):
-        """
-        From bytes parse and obtain the IGMP Header object and all its payload
-        """
-        #Filter the data to get only the IGMP Report header
-        header = data[0:PacketIGMPHeaderReport.IGMP_HDR_R_LEN]
-        (type, reserved1, rcvChecksum, reserved2, numberOfRecords) = struct.unpack(PacketIGMPHeaderReport.IGMP_HDR_R, header)
-
-        #Checking if the packet contains the entire message through the checksum option
-        msgToChecksum = data[0:2] + b'\x00\x00' + data[4:]
-        if checksum(msgToChecksum) != rcvChecksum:
-            #print("wrong checksum")
-            raise Exception("[ERROR]: Wrong Checksum. The packet may be damaged.")
-        """
-        'TYPE': type,
-        'RESERVED': reserved1, 
-        'CHECKSUM': rcvChecksum, 
-        'RESERVED': reserved2, 
-        'GROUPS': numberOfRecords
-        """
-        packet = PacketIGMPHeaderReport(type, reserved1, reserved2, numberOfRecords)
-        return packet
+header = PacketIGMPHeader(report)
+c = header.bytes()
+a = PacketIGMPHeader.parse_bytes(c)
+print(a.getIgmpMaxTime())
+print(a.getIgmpType())
