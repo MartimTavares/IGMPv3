@@ -3,7 +3,6 @@
 # college engineering course on telecommunications and software engineering.        *
 # The date of last update on this file: 8th april 2022                              *
 
-from audioop import add
 import struct
 import socket
 

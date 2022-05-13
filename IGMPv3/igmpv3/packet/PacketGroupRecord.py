@@ -7,7 +7,7 @@ import struct
 import socket
 from abc import ABCMeta, abstractstaticmethod
 
-from PacketIGMPMSourceAddress import PacketIGMPMSourceAddress
+from .PacketIGMPMSourceAddress import PacketIGMPMSourceAddress
 #How to create an instance of the object:
 #address1 = "127.0.0.1"
 #g1 = PacketGroupRecord("MODE_IS_INCLUDE", address1)

@@ -53,6 +53,7 @@ class PacketIpv4Header(PacketIpHeader):
     def __init__(self, ver, hdr_len, ttl, proto, ip_src, ip_dst):
         super().__init__(ver, hdr_len)
         self.ttl = ttl
+        # Must be 2 for IGMP
         self.proto = proto
         self.ip_src = ip_src
         self.ip_dst = ip_dst
@@ -60,6 +61,7 @@ class PacketIpv4Header(PacketIpHeader):
     def __len__(self):
         return self.hdr_length
 
+    
     @staticmethod
     def parse_bytes(data: bytes):
         (verhlen, tos, iplen, ipid, frag, ttl, proto, cksum, src, dst) = \
@@ -156,3 +158,5 @@ PACKET_HEADER = {
     4: PacketIpv4Header,
     6: PacketIpv6Header,
 }
+
+

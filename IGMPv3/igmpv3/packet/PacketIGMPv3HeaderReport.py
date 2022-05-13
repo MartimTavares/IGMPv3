@@ -1,13 +1,13 @@
 # Coded in 2022 by Martim Tavares and Sebastião Limbert, Instituto Superior Técnico.*
 # This file is part of the IGMPv3 protocol's development project oriented for a     *
 # college engineering course on telecommunications and software engineering.        *
-# The date of last update on this file: 16th april 2022                              *
+# The date of last update on this file: 16th april 2022                             *
 
 import struct
 import socket
 from abc import ABCMeta, abstractstaticmethod
-from PacketIGMPMSourceAddress import PacketIGMPMSourceAddress
-from PacketGroupRecord import PacketGroupRecord
+from .PacketIGMPMSourceAddress import PacketIGMPMSourceAddress
+from .PacketGroupRecord import PacketGroupRecord
 
 
 class PacketIGMPv3HeaderReport:
@@ -37,7 +37,7 @@ class PacketIGMPv3HeaderReport:
     """
 
     IGMP_TYPE = 0x22
-    MAX_TIME = 10
+    MAX_TIME = 0 #RESERVED SPACE
 
     IGMP_VERSION = 3
 
