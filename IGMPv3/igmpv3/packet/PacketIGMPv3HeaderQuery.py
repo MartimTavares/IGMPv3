@@ -7,7 +7,7 @@
 import struct
 import socket
 from abc import ABCMeta, abstractstaticmethod
-from PacketIGMPMSourceAddress import PacketIGMPMSourceAddress
+from .PacketIGMPMSourceAddress import PacketIGMPMSourceAddress
 
 
 class PacketIGMPv3HeaderQuery:
@@ -31,7 +31,10 @@ class PacketIGMPv3HeaderQuery:
     """
 
     IGMP_TYPE = 0x11
+    #Maximum response time is 10 by default
     MAX_TIME = 10
+
+    GROUP_ADDRESS = "0.0.0.0"
 
     IGMP_VERSION = 3
 
@@ -52,7 +55,11 @@ class PacketIGMPv3HeaderQuery:
         #And is of type: PacketIGMPMSourceAddress
         self.source_addresses = []
         self.group_address = group_address
+        PacketIGMPv3HeaderQuery.GROUP_ADDRESS = group_address
+
         self.qqic = qqic
+        # Periodic time that the Querier will send queries
+        PacketIGMPv3HeaderQuery.MAX_TIME = qqic
         self.qrv = qrv
         self.s = s
         self.resv = resv
@@ -87,6 +94,9 @@ class PacketIGMPv3HeaderQuery:
         if isAlready == False:
             self.source_addresses.append(source)
 
+    def getSourceAddresses(self):
+        return self.source_addresses
+        
 
     def bytes(self) -> bytes:
         """
