@@ -10,7 +10,7 @@ from igmpv3.packet.PacketIGMPv3HeaderReport import PacketIGMPv3HeaderReport
 from igmpv3.packet.ReceivedPacket import ReceivedPacket
 from igmpv3.packet.utils import TYPE_CHECKING
 
-from . import igmp_globals
+from .igmp_globals import igmp_globals
 from .GroupState import GroupState
 
 if TYPE_CHECKING:
@@ -33,6 +33,7 @@ class RouterState(object):
 
         # state of the router (Querier/NonQuerier)
         self.interface_state = "Querier"
+        self.whoIsQuerier = self.interface.get_ip()
 
         # state of each group
         # Key: GroupIPAddress, Value: GroupState object
@@ -40,7 +41,7 @@ class RouterState(object):
         self.group_state_lock = threading.Lock()
 
         # send general query to all the routers, where S=0 | qrv=2 | QQIC=125
-        packet = PacketIGMPv3HeaderQuery(0, 0b00000000, 0b00000010, 125, "224.0.0.22")
+        packet = PacketIGMPv3HeaderQuery(0, 0, 2, 125, "224.0.0.22")
         igmp_pckt = PacketIGMPHeader(packet)
         self.interface.send(igmp_pckt.bytes(), "224.0.0.22")
 
@@ -98,12 +99,26 @@ class RouterState(object):
         General Query timer has expired
         """
         self.router_state_logger.debug('State: general_query_timeout')
+        #sends a new general query 
+        packet = PacketIGMPv3HeaderQuery(0, 0, 2, igmp_globals.QUERY_INTERVAL, "0.0.0.0")
+        igmp_pckt = PacketIGMPHeader(packet)
+        if self.interface_state == "Querier":
+            self.interface.send(igmp_pckt.bytes(), "224.0.0.1")
+            self.set_general_query_timer()
 
     def other_querier_present_timeout(self):
         """
         Other Querier Present timer has expired
         """
         self.router_state_logger.debug('State: other_querier_present_timeout')
+        # becomes the Querier
+        self.change_interface_state(True)
+        self.clear_other_querier_present_timer()
+        self.clear_general_query_timer()
+        # send general query to all the routers, where S=0 | qrv=2 | QQIC=125
+        packet = PacketIGMPv3HeaderQuery(0, 0, 2, 125, "224.0.0.22")
+        igmp_pckt = PacketIGMPHeader(packet)
+        self.interface.send(igmp_pckt.bytes(), "224.0.0.22")
 
     def change_interface_state(self, querier: bool):
         """
@@ -130,7 +145,7 @@ class RouterState(object):
             self.group_state_lock.release()
             return self.group_state[group_ip]
         else:
-            group_state = GroupState(self, group_ip)
+            group_state = GroupState(group_ip,"INCLUDE", self)
             self.group_state[group_ip] = group_state
             self.group_state_lock.release()
             return group_state
@@ -142,7 +157,7 @@ class RouterState(object):
         group_records = packet.payload.getPayload().group_records
         for group in group_records:
             mc_ip = group.getMulticastAddress()
-            adds = group.source_addresses
+            adds = group.source_addresses  # list of PacketIGMPMSourceAddress
             #e.g: TO_INCLUDE
             fnct = group.getRecordType()
             self.get_group_state(mc_ip).receive_v3_membership_report(adds, fnct)
@@ -151,20 +166,32 @@ class RouterState(object):
         """
         Received IGMP Query packet
         """
-        self.interface_state.receive_query(self, packet)
         igmp_group = packet.payload.getPayload().getGroupAddress()
+        sources = packet.payload.getPayload().getSourceAddresses()
+        sFlag = packet.payload.getPayload().getS()
         ip_src = packet.ip_header.ip_src
         # process group specific query
         # expects to receive a report from the hosts of this specific group
         if igmp_group != "0.0.0.0" and igmp_group in self.group_state:
             max_response_time = packet.payload.getIgmpMaxTime()
-            self.get_group_state(igmp_group).receive_group_specific_query(max_response_time)
+            self.get_group_state(igmp_group).receive_group_specific_query(
+                max_response_time, sources)
+            
         # querier election process
-        elif igmp_group == "0.0.0.0":
-            if IPv4Address(ip_src) < IPv4Address(self.interface.get_ip()):
-                #Becomes Non-Querier
-                self.change_interface_state(False)
-                self.set_other_querier_present_timer()
+        if IPv4Address(ip_src) < IPv4Address(self.interface.get_ip()):
+            #Becomes Non-Querier if not already
+            self.change_interface_state(False)
+            self.clear_other_querier_present_timer()
+            self.clear_general_query_timer()
+            #Checks if it is a new Querier
+            if IPv4Address(ip_src) <= IPv4Address(self.whoIsQuerier):
+                self.whoIsQuerier = ip_src
+                if sFlag == 0:
+                    self.set_other_querier_present_timer()
+            
+
+    def remove_group(self, group_ip):
+        self.group_state.pop(group_ip)
             
 
     def remove(self):
