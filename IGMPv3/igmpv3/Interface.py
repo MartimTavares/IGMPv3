@@ -62,7 +62,7 @@ class Interface(metaclass=ABCMeta):
             try:
                 self._send_socket.sendto(data, (group_ip, 0))
             except socket.error:
-                pass
+                print("The socket failed to send the data.")
 
     def remove(self):
         """

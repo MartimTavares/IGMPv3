@@ -4,17 +4,17 @@ from threading import Lock
 import logging
 import threading
 
-from igmpv3.packet.PacketIGMPHeader import PacketIGMPHeader
-from igmpv3.packet.PacketIGMPv3HeaderQuery import PacketIGMPv3HeaderQuery
-from igmpv3.packet.PacketIGMPv3HeaderReport import PacketIGMPv3HeaderReport
-from igmpv3.packet.ReceivedPacket import ReceivedPacket
-from igmpv3.packet.utils import TYPE_CHECKING
+from packet.PacketIGMPHeader import PacketIGMPHeader
+from packet.PacketIGMPv3HeaderQuery import PacketIGMPv3HeaderQuery
+from packet.PacketIGMPv3HeaderReport import PacketIGMPv3HeaderReport
+from packet.ReceivedPacket import ReceivedPacket
+from packet.utils import TYPE_CHECKING
 
-from .igmp_globals import igmp_globals
-from .GroupState import GroupState
+from igmp_globals import QUERY_INTERVAL, OTHER_QUERIER_PRESENT_INTERVAL
+from GroupState import GroupState
 
 if TYPE_CHECKING:
-    from igmpv3.InterfaceIGMP import InterfaceIGMP
+    from InterfaceIGMP import InterfaceIGMP
 
 
 class RouterState(object):

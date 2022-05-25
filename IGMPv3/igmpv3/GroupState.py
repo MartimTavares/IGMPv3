@@ -4,15 +4,14 @@ from threading import Timer
 from threading import Lock
 import logging
 import threading
-from igmpv3 import packet
-from igmpv3.packet.PacketIGMPHeader import PacketIGMPHeader
+from packet.PacketIGMPHeader import PacketIGMPHeader
 
-from igmpv3.packet.PacketIGMPv3HeaderQuery import PacketIGMPv3HeaderQuery
+from packet.PacketIGMPv3HeaderQuery import PacketIGMPv3HeaderQuery
 
-from . import igmp_globals
-from .RouterState import RouterState
-from igmpv3.InterfaceIGMP import InterfaceIGMP
-from igmpv3.packet.PacketIGMPMSourceAddress import PacketIGMPMSourceAddress
+from igmp_globals import GROUP_MEMBERSHIP_INTERVAL, MAX_RESPONSE_TIME_LAST_MEMBER_QUERY_INTERVAL
+from RouterState import RouterState
+from InterfaceIGMP import InterfaceIGMP
+from packet.PacketIGMPMSourceAddress import PacketIGMPMSourceAddress
 class GroupState:
     # Key: GroupIPAddress, Value: GroupState object
     # In RouterState.py --> self.group_state = {}
@@ -20,7 +19,7 @@ class GroupState:
     INCLUDE = "INCLUDE"
     EXCLUDE = "EXCLUDE"
 
-    def __init__(self, mc_ip_address, filter_mode, router_state: RouterState):
+    def __init__(self, mc_ip_address, filter_mode, router_state: 'RouterState'):
         if not IPv4Address(mc_ip_address).is_multicast:
             raise ValueError(mc_ip_address + ' is not a multicast address')
         self.group_ip = mc_ip_address
@@ -38,6 +37,7 @@ class GroupState:
         for i in self.source_addresses:
             if i == source:
                 isAlready = True
+                self.set_source_timer(i)
                 break
         if isAlready == False:
             self.set_source_timer(source)
@@ -68,7 +68,7 @@ class GroupState:
         """
         self.clear_source_timer(source)
         source_timer = Timer(
-            igmp_globals.GROUP_MEMBERSHIP_INTERVAL, self.source_timeout)
+            igmp_globals.GROUP_MEMBERSHIP_INTERVAL, self.source_timeout, [source])
         source_timer.start()
         self.source_addresses[source] = source_timer
 
@@ -82,11 +82,22 @@ class GroupState:
     def group_timeout(self):
         for source in self.sources_in_risk_to_exclude:
             if source in self.source_addresses:
-                self.source_addresses.pop(source)
-                self.sources_in_risk_to_exclude.pop(source)
+                if self.filter_mode == GroupState.INCLUDE:
+                    self.source_addresses.pop(source)
+                    self.sources_in_risk_to_exclude.pop(source)
+                else: 
+                    self.sources_in_risk_to_exclude.pop(source)
         if len(self.source_addresses) == 0:
             self.filter_mode = GroupState.INCLUDE
-        
+        #if all source timers have expired => delete group 
+        cntr = True
+        for source in self.source_addresses:
+            if self.source_addresses[source] != None:
+                cntr = False
+                break
+        if cntr == False:
+            self.router_state.remove_group(self.group_ip)
+            self.remove()
 
     def source_timeout(self, source: str):
         if self.filter_mode == GroupState.INCLUDE:
@@ -95,8 +106,6 @@ class GroupState:
             print("Source {} was removed from group {} sources list.".format(source, self.group_ip))
         elif self.filter_mode == GroupState.EXCLUDE:
             self.source_addresses[source] = None
-            if source not in self.sources_in_risk_to_exclude:
-                self.sources_in_risk_to_exclude.append(source)
             print("Source {} will be removed if the group timer expires.". format(source))
 
     #          #         #      */
@@ -110,12 +119,15 @@ class GroupState:
         for source in self.source_addresses:
             lst_ip.append(source)
         
-        #INCLUDE
-        if operation_type == 1: 
+        #INCLUDE | # ALLOW_NEW_SOURCES
+        if operation_type == 1 or operation_type == 5: 
             if self.filter_mode == GroupState.INCLUDE:
                 for s in source_addresses:
                     if s.getAddress() not in self.source_addresses:
                         self.add_sources(s.getAddress())
+                for s in source_addresses:
+                    if s.getAddress() in self.sources_in_risk_to_exclude:
+                        self.sources_in_risk_to_exclude.pop(s.getAddress())
         #EXCLUDE
         elif operation_type == 2: 
             if len(source_addresses) == 0:
@@ -138,20 +150,27 @@ class GroupState:
         elif operation_type == 3:  
             if self.filter_mode == GroupState.INCLUDE:
                 for s in source_addresses:
-                    self.add_sources(s)
-                #send a group and source specific query Q(G, A-B)
+                    self.add_sources(s.getAddress())
+            #send a group and source specific query Q(G, A-B)
+            data = PacketIGMPv3HeaderQuery(0, 0, 2, 125, self.group_ip)
+            lst3 = [value for value in src_ip if value in lst_ip]
+            load = list(set(lst_ip) - set(lst3))
+            for s in load:
+                source = PacketIGMPMSourceAddress(s)
+                data.addSourceAddress(source)
+            packet = PacketIGMPHeader(data)
+            self.router_state.interface.send(packet.bytes(), self.group_ip)
+                
+            if self.filter_mode == GroupState.EXCLUDE:
+                for s in self.source_addresses:
+                    if s in lst_ip:
+                        self.source_addresses.pop(s)
+                #send a group specific query Q(G)
                 data = PacketIGMPv3HeaderQuery(0, 0, 2, 125, self.group_ip)
-                lst3 = [value for value in src_ip if value in lst_ip]
-                load = list(set(lst_ip) - set(lst3))
-                for s in load:
-                    source = PacketIGMPMSourceAddress(s)
-                    data.addSourceAddress(source)
-                    self.sources_in_risk_to_exclude.append(s)
                 packet = PacketIGMPHeader(data)
                 self.router_state.interface.send(packet.bytes(), self.group_ip)
-                self.set_group_timer()
-                self.filter_mode == GroupState.EXCLUDE
-        # CHANGE_TO_EXCLUDE
+            self.set_group_timer()
+        # CHANGE_TO_EXCLUDE TODO
         elif operation_type == 4:
             # remove the intersection of both source lists from group state
             lst3 = [value for value in src_ip if value in lst_ip]
@@ -159,7 +178,7 @@ class GroupState:
             for s in self.source_addresses:
                 if s in load:
                     self.source_addresses.pop(s)
-            #send a group and source specific query Q(G, A-B)
+            #send a group and source specific query Q(G, A*B)
             data = PacketIGMPv3HeaderQuery(0, 0, 2, 125, self.group_ip)
             for s in list(set(lst3)): # common sources
                 source = PacketIGMPMSourceAddress(s)
@@ -169,10 +188,22 @@ class GroupState:
             self.set_group_timer()
             if self.filter_mode == GroupState.INCLUDE:
                 self.filter_mode == GroupState.EXCLUDE
-        # ALLOW_NEW_SOURCES
-        #elif operation_type == 5:  
-        #elif operation_type == 6:  # BLOCK_OLD_SOURCES
-    
+        # BLOCK_OLD_SOURCES
+        elif operation_type == 6:
+            lst3 = [value for value in src_ip if value in lst_ip]
+            load = list(set(lst_ip) - set(lst3))
+            if self.filter_mode == GroupState.INCLUDE:
+                #send a group and source specific query Q(G, A*B)
+                data = PacketIGMPv3HeaderQuery(0, 0, 2, 125, self.group_ip)
+                for s in list(set(lst3)):  # common sources
+                    source = PacketIGMPMSourceAddress(s)
+                    data.addSourceAddress(source)
+                    self.sources_in_risk_to_exclude.append(s)
+                packet = PacketIGMPHeader(data)
+                self.router_state.interface.send(packet.bytes(), self.group_ip)
+            #elif self.filter_mode == GroupState.EXCLUDE: TODO
+            self.set_group_timer()
+
     #          #         #      */
     # QUERY METHODS      #      */
     #          #         #      */
@@ -180,6 +211,24 @@ class GroupState:
     def receive_group_specific_query(self, max_response_time, source_adds):
         self.set_group_timer()
         # TODO waits until it receives a report in which it is desired to receive from this group
+        if len(source_adds) == 0:
+            self.clear_group_timer()
+            group_timer = Timer(
+                igmp_globals.MAX_RESPONSE_TIME_LAST_MEMBER_QUERY_INTERVAL, self.group_timeout)
+            group_timer.start()
+            self.group_timer = group_timer
+        else:
+            lst_ip = []
+            for source in source_adds:
+                lst_ip.append(source.getAddress())
+            for s in self.source_addresses:
+                if s in lst_ip:
+                    self.clear_source_timer(s)
+                    source_timer = Timer(
+                        igmp_globals.MAX_RESPONSE_TIME_LAST_MEMBER_QUERY_INTERVAL, self.source_timeout, [s])
+                    source_timer.start()
+                    self.source_addresses[s] = source_timer
+            
     
     def remove(self):
         self.clear_group_timer

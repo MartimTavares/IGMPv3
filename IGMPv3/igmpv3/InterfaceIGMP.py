@@ -6,7 +6,7 @@ from ctypes import create_string_buffer, addressof
 
 from packet.ReceivedPacket import ReceivedPacket
 from Interface import Interface
-from igmp3.igmp_globals import VERSION_3_QUERY, VERSION_3_REPORT
+from igmp_globals import VERSION_3_QUERY, VERSION_3_REPORT
 if not hasattr(socket, 'SO_BINDTODEVICE'):
     socket.SO_BINDTODEVICE = 25
 
@@ -61,8 +61,9 @@ class InterfaceIGMP(Interface):
         super().__init__(interface_name=interface_name,
                          recv_socket=rcv_s, send_socket=snd_s, vif_index=vif_index)
         super().enable()
-        from igmpv3.igmp3.RouterState import RouterState
-        self.interface_state = RouterState(self)
+        # TODO: next 2 lines in comment for testing purpose.
+        #from RouterState import RouterState
+        #self.interface_state = RouterState(self)
 
     @staticmethod
     def _get_address_family():
