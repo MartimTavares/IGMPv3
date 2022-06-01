@@ -1,4 +1,4 @@
-# Coded in 2022 by Martim Tavares and Sebastião Limbert, Instituto Superior Técnico.*
+# Coded in 2022 by Martim Tavares, Instituto Superior Técnico.                      *
 # This file is part of the IGMPv3 protocol's development project oriented for a     *
 # college engineering course on telecommunications and software engineering.        *
 # The date of last update on this file: 18th april 2022                             *

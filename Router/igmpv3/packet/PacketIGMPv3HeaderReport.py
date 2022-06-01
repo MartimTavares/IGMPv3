@@ -1,4 +1,4 @@
-# Coded in 2022 by Martim Tavares and Sebastião Limbert, Instituto Superior Técnico.*
+# Coded in 2022 by Martim Tavares, Instituto Superior Técnico.                      *
 # This file is part of the IGMPv3 protocol's development project oriented for a     *
 # college engineering course on telecommunications and software engineering.        *
 # The date of last update on this file: 16th april 2022                             *
@@ -88,16 +88,20 @@ class PacketIGMPv3HeaderReport:
         #Filter the data to get only the IGMP Report header
         header = data[0:PacketIGMPv3HeaderReport.IGMP_HDR_R_LEN]
         (reserved, number_groups) = struct.unpack(PacketIGMPv3HeaderReport.IGMP_HDR_R, header)
-
         packet = PacketIGMPv3HeaderReport(reserved)
 
         header = data[PacketIGMPv3HeaderReport.IGMP_HDR_R_LEN:]
         for i in range(0, number_groups):
-            group = header[:PacketGroupRecord.GROUP_RECORD_LEN]
-            
-            group = PacketGroupRecord.parse_bytes(group)
+            group = PacketGroupRecord.parse_bytes(header)
             packet.addGroupRecord(group)
-            header = header[PacketGroupRecord.GROUP_RECORD_LEN:]
+            number_sources = group.getNumberSources()
+            sources_len = number_sources * PacketIGMPMSourceAddress.SOURCE_ADDRESS_LEN
+            next_byte_pos = PacketGroupRecord.GROUP_RECORD_LEN + sources_len
+            # Strategy: send header to PacketGroupRecord
+            # then ---> in here check number of sources from group 
+            #           object and use its length to calculate next
+            #           position for the header pointer
+            header = header[next_byte_pos:]
         return packet
 
 

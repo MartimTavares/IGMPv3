@@ -10,7 +10,8 @@ from packet.PacketIGMPv3HeaderQuery import PacketIGMPv3HeaderQuery
 
 from igmp_globals import GROUP_MEMBERSHIP_INTERVAL, MAX_RESPONSE_TIME_LAST_MEMBER_QUERY_INTERVAL
 from RouterState import RouterState
-from InterfaceIGMP import InterfaceIGMP
+# TODO: next line in comment for testing purpose.
+#from InterfaceIGMP import InterfaceIGMP
 from packet.PacketIGMPMSourceAddress import PacketIGMPMSourceAddress
 class GroupState:
     # Key: GroupIPAddress, Value: GroupState object
@@ -25,6 +26,7 @@ class GroupState:
         self.group_ip = mc_ip_address
         # lock
         self.lock = Lock()
+        self.group_timer = None
         self.set_group_timer()
         self.filter_mode = filter_mode
         # Key: str ip_address, Value: Timer object
@@ -50,8 +52,7 @@ class GroupState:
         Set back to 0 the group timer
         """
         self.clear_group_timer()
-        group_timer = Timer(
-            igmp_globals.GROUP_MEMBERSHIP_INTERVAL, self.group_timeout)
+        group_timer = Timer(GROUP_MEMBERSHIP_INTERVAL, self.group_timeout)
         group_timer.start()
         self.group_timer = group_timer
 
@@ -67,8 +68,7 @@ class GroupState:
         Set back to 0 the source timer
         """
         self.clear_source_timer(source)
-        source_timer = Timer(
-            igmp_globals.GROUP_MEMBERSHIP_INTERVAL, self.source_timeout, [source])
+        source_timer = Timer(GROUP_MEMBERSHIP_INTERVAL, self.source_timeout, [source])
         source_timer.start()
         self.source_addresses[source] = source_timer
 
@@ -118,7 +118,13 @@ class GroupState:
         src_ip = []
         for source in self.source_addresses:
             lst_ip.append(source)
-        
+        # Turns off the timer associated with the source.
+        # When it receives a query with sources, the router
+        # should expect an answer from hosts in a certain time.
+        for source in lst_ip:
+            if source in self.source_addresses:
+                self.clear_source_timer(source)
+
         #INCLUDE | # ALLOW_NEW_SOURCES
         if operation_type == 1 or operation_type == 5: 
             if self.filter_mode == GroupState.INCLUDE:
@@ -208,26 +214,26 @@ class GroupState:
     # QUERY METHODS      #      */
     #          #         #      */
 
-    def receive_group_specific_query(self, max_response_time, source_adds):
+    def receive_group_specific_query(self, max_response_time, source_adds: PacketIGMPMSourceAddress):
         self.set_group_timer()
-        # TODO waits until it receives a report in which it is desired to receive from this group
+        # Waits until it receives a report in which it is desired to receive from this group
         if len(source_adds) == 0:
             self.clear_group_timer()
-            group_timer = Timer(
-                igmp_globals.MAX_RESPONSE_TIME_LAST_MEMBER_QUERY_INTERVAL, self.group_timeout)
+            group_timer = Timer(MAX_RESPONSE_TIME_LAST_MEMBER_QUERY_INTERVAL, self.group_timeout)
             group_timer.start()
             self.group_timer = group_timer
         else:
             lst_ip = []
             for source in source_adds:
                 lst_ip.append(source.getAddress())
+                
             for s in self.source_addresses:
                 if s in lst_ip:
                     self.clear_source_timer(s)
-                    source_timer = Timer(
-                        igmp_globals.MAX_RESPONSE_TIME_LAST_MEMBER_QUERY_INTERVAL, self.source_timeout, [s])
+                    source_timer = Timer(MAX_RESPONSE_TIME_LAST_MEMBER_QUERY_INTERVAL, self.source_timeout, [s])
                     source_timer.start()
                     self.source_addresses[s] = source_timer
+                    
             
     
     def remove(self):

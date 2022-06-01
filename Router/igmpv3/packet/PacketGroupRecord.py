@@ -1,4 +1,4 @@
-# Coded in 2022 by Martim Tavares and Sebastião Limbert, Instituto Superior Técnico.*
+# Coded in 2022 by Martim Tavares, Instituto Superior Técnico.                      *
 # This file is part of the IGMPv3 protocol's development project oriented for a     *
 # college engineering course on telecommunications and software engineering.        *
 # The date of last update on this file: 9th april 2022                              *
@@ -48,7 +48,7 @@ class PacketGroupRecord:
                         "5": "ALLOW_NEW_SOURCES",
                         "6": "BLOCK_OLD_SOURCES"}
 
-    def __init__(self, record_type, multicast_address):
+    def __init__(self, record_type, multicast_address: PacketIGMPMSourceAddress):
         #Checks if the group address is one of two types possible: Bytes or string
         if type(multicast_address) not in (str, bytes):
             raise Exception
@@ -56,12 +56,11 @@ class PacketGroupRecord:
             multicast_address = socket.inet_ntoa(multicast_address)
         contr = False
         for key in PacketGroupRecord.RECORD_MSG_TYPES:
-            if record_type == PacketGroupRecord.RECORD_MSG_TYPES[key]:
+            if str(record_type) == key:
                 contr = True
                 break
         if contr == False:
             raise Exception
-
         self.source_addresses = []
         self.record_type = record_type
         #[RFC:3376] The protocol specified in this document,
@@ -73,6 +72,13 @@ class PacketGroupRecord:
 
     def getRecordType(self):
         return self.record_type
+    
+    
+    def getNumberSources(self):
+        return self.number_of_sources
+    
+    def setNumberSources(self, number_of_sources):
+        self.number_of_sources = number_of_sources
     
     
     def getMulticastAddress(self):
@@ -92,16 +98,11 @@ class PacketGroupRecord:
     def bytes(self) -> bytes:
         """
         Obtain packet in byte format
-        """
-        for key in PacketGroupRecord.RECORD_MSG_TYPES:
-            if self.record_type == PacketGroupRecord.RECORD_MSG_TYPES[key]:
-                type = int(key)
-                
-        msg = struct.pack(PacketGroupRecord.GROUP_RECORD, type, 0, len(self.source_addresses), socket.inet_aton(self.multicast_address))
-        
+        """    
+        msg = struct.pack(PacketGroupRecord.GROUP_RECORD, self.record_type, 0, len(
+            self.source_addresses), socket.inet_aton(self.multicast_address))
         for source in self.source_addresses:
             msg += source.bytes()
-
         return msg
 
 
@@ -116,19 +117,21 @@ class PacketGroupRecord:
         
         for key in PacketGroupRecord.RECORD_MSG_TYPES:
             if str(type) == key:
-                record_type = PacketGroupRecord.RECORD_MSG_TYPES[key]
+                record_type = key
                 
         multicast_address = socket.inet_ntoa(multicast_address)
-
         packet = PacketGroupRecord(record_type, multicast_address)
-
+        packet.setNumberSources(number_of_sources)
         header = data[PacketGroupRecord.GROUP_RECORD_LEN:]
-        for i in range(0, number_of_sources):
-            source = header[:PacketIGMPMSourceAddress.SOURCE_ADDRESS_LEN]
-            auxUnPack = struct.unpack(PacketIGMPMSourceAddress.SOURCE_ADDRESS, source)
-            address = PacketIGMPMSourceAddress.parse_bytes(auxUnPack[0])
-            packet.addSourceAddress(address)
-            header = header[PacketIGMPMSourceAddress.SOURCE_ADDRESS_LEN:]
+        
+        if number_of_sources > 0:
+            for i in range(0, number_of_sources):
+                source = header[:PacketIGMPMSourceAddress.SOURCE_ADDRESS_LEN]
+                auxUnPack = struct.unpack(PacketIGMPMSourceAddress.SOURCE_ADDRESS, source)
+                address = PacketIGMPMSourceAddress.parse_bytes(auxUnPack[0])
+                packet.addSourceAddress(address)
+                header = header[PacketIGMPMSourceAddress.SOURCE_ADDRESS_LEN:]
+        
         return packet
 
 

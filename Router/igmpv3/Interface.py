@@ -36,6 +36,7 @@ class Interface(metaclass=ABCMeta):
         """
         Method that will be executed in the background for the reception of control packets
         """
+        
         while self.interface_enabled:
             try:
                 (raw_bytes, src_addr) = self._recv_socket.recvfrom(256 * 1024)
@@ -60,6 +61,7 @@ class Interface(metaclass=ABCMeta):
         """
         if self.interface_enabled and data:
             try:
+                #(group_ip, 0) -> destination IP, destination Port
                 self._send_socket.sendto(data, (group_ip, 0))
             except socket.error:
                 print("The socket failed to send the data.")

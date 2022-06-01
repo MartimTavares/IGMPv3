@@ -11,7 +11,8 @@ from packet.ReceivedPacket import ReceivedPacket
 from packet.utils import TYPE_CHECKING
 
 from igmp_globals import QUERY_INTERVAL, OTHER_QUERIER_PRESENT_INTERVAL
-from GroupState import GroupState
+
+#from GroupState import GroupState
 
 if TYPE_CHECKING:
     from InterfaceIGMP import InterfaceIGMP
@@ -41,12 +42,13 @@ class RouterState(object):
         self.group_state_lock = threading.Lock()
 
         # send general query to all the routers, where S=0 | qrv=2 | QQIC=125
-        packet = PacketIGMPv3HeaderQuery(0, 0, 2, 125, "224.0.0.22")
+        packet = PacketIGMPv3HeaderQuery(0, 0, 2, 125, "0.0.0.0")
         igmp_pckt = PacketIGMPHeader(packet)
         self.interface.send(igmp_pckt.bytes(), "224.0.0.22")
-
+        print("/*  *  *  *  *  *  *  *  *  *  *  *  *  *  */")
+        print("Current Querier IP: {}".format(self.whoIsQuerier))
         # set initial general query timer 
-        timer = Timer(igmp_globals.QUERY_INTERVAL, self.general_query_timeout)
+        timer = Timer(QUERY_INTERVAL, self.general_query_timeout)
         timer.start()
         self.general_query_timer = timer
 
@@ -67,9 +69,10 @@ class RouterState(object):
         """
         self.clear_general_query_timer()
         #means it will wait x time - 1st parameter - and then it will execute the function - 2nd parameter.
-        general_query_timer = Timer(igmp_globals.QUERY_INTERVAL, self.general_query_timeout)
+        general_query_timer = Timer(QUERY_INTERVAL, self.general_query_timeout)
         general_query_timer.start()
         self.general_query_timer = general_query_timer
+        print("General Query Timer has started.")
 
     def clear_general_query_timer(self):
         """
@@ -83,7 +86,7 @@ class RouterState(object):
         Set back to 0 the other querier present timer
         """
         self.clear_other_querier_present_timer()
-        other_querier_present_timer = Timer(igmp_globals.OTHER_QUERIER_PRESENT_INTERVAL, self.other_querier_present_timeout)
+        other_querier_present_timer = Timer(OTHER_QUERIER_PRESENT_INTERVAL, self.other_querier_present_timeout)
         other_querier_present_timer.start()
         self.other_querier_present_timer = other_querier_present_timer
 
@@ -98,9 +101,10 @@ class RouterState(object):
         """
         General Query timer has expired
         """
+        print("General Query Timer has expired.")
         self.router_state_logger.debug('State: general_query_timeout')
         #sends a new general query 
-        packet = PacketIGMPv3HeaderQuery(0, 0, 2, igmp_globals.QUERY_INTERVAL, "0.0.0.0")
+        packet = PacketIGMPv3HeaderQuery(0, 0, 2, QUERY_INTERVAL, "0.0.0.0")
         igmp_pckt = PacketIGMPHeader(packet)
         if self.interface_state == "Querier":
             self.interface.send(igmp_pckt.bytes(), "224.0.0.1")
@@ -113,12 +117,7 @@ class RouterState(object):
         self.router_state_logger.debug('State: other_querier_present_timeout')
         # becomes the Querier
         self.change_interface_state(True)
-        self.clear_other_querier_present_timer()
-        self.clear_general_query_timer()
-        # send general query to all the routers, where S=0 | qrv=2 | QQIC=125
-        packet = PacketIGMPv3HeaderQuery(0, 0, 2, 125, "224.0.0.22")
-        igmp_pckt = PacketIGMPHeader(packet)
-        self.interface.send(igmp_pckt.bytes(), "224.0.0.22")
+        
 
     def change_interface_state(self, querier: bool):
         """
@@ -128,10 +127,22 @@ class RouterState(object):
             self.interface_state = "Querier"
             self.router_state_logger.debug(
                 'change querier state to -> Querier')
+            self.clear_other_querier_present_timer()
+            self.clear_general_query_timer()
+            self.set_general_query_timer()
+            # send general query to all the routers, where S=0 | qrv=2 | QQIC=125
+            packet = PacketIGMPv3HeaderQuery(0, 0, 2, 125, "0.0.0.0")
+            igmp_pckt = PacketIGMPHeader(packet)
+            self.interface.send(igmp_pckt.bytes(), "224.0.0.22")
+            self.whoIsQuerier = self.interface.get_ip()
+            print("Current Querier IP: {}".format(self.whoIsQuerier))
+
         else:
             self.interface_state = "NonQuerier"
             self.router_state_logger.debug(
                 'change querier state to -> NonQuerier')
+            self.clear_other_querier_present_timer()
+            self.clear_general_query_timer()
 
     ############################################
     # group state methods
@@ -145,6 +156,7 @@ class RouterState(object):
             self.group_state_lock.release()
             return self.group_state[group_ip]
         else:
+            from GroupState import GroupState
             group_state = GroupState(group_ip,"INCLUDE", self)
             self.group_state[group_ip] = group_state
             self.group_state_lock.release()
@@ -181,11 +193,10 @@ class RouterState(object):
         if IPv4Address(ip_src) < IPv4Address(self.interface.get_ip()):
             #Becomes Non-Querier if not already
             self.change_interface_state(False)
-            self.clear_other_querier_present_timer()
-            self.clear_general_query_timer()
             #Checks if it is a new Querier
             if IPv4Address(ip_src) <= IPv4Address(self.whoIsQuerier):
                 self.whoIsQuerier = ip_src
+                print("Current Querier IP: {}".format(self.whoIsQuerier))
                 if sFlag == 0:
                     self.set_other_querier_present_timer()
             

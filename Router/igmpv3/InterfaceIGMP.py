@@ -61,10 +61,10 @@ class InterfaceIGMP(Interface):
         super().__init__(interface_name=interface_name,
                          recv_socket=rcv_s, send_socket=snd_s, vif_index=vif_index)
         super().enable()
-        # TODO: next 2 lines in comment for testing purpose.
-        #from RouterState import RouterState
-        #self.interface_state = RouterState(self)
-
+        
+        from RouterState import RouterState
+        self.interface_state = RouterState(self)
+        
     @staticmethod
     def _get_address_family():
         return socket.AF_INET
