@@ -184,7 +184,7 @@ class RouterState(object):
         ip_src = packet.ip_header.ip_src
         # process group specific query
         # expects to receive a report from the hosts of this specific group
-        if igmp_group != "0.0.0.0" and igmp_group in self.group_state:
+        if igmp_group != "0.0.0.0":
             max_response_time = packet.payload.getIgmpMaxTime()
             self.get_group_state(igmp_group).receive_group_specific_query(
                 max_response_time, sources)

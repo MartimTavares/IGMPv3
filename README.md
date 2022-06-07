@@ -7,7 +7,7 @@ Bachelor's Final Year Project - IST 2021/2022
 | Number | Name              | User                                        | Email                                             |
 |--------|-------------------|---------------------------------------------|---------------------------------------------------|
 | 96758  | Martim Tavares    | <https://github.com/MartimTavares>          | <mailto:martim.tavares@tecnico.ulisboa.pt>        |
-| 96767  | Sebastião Limbert | <https://github.com/slimbert00>             | <mailto:sebastiao.piedade@tecnico.ulisboa.pt>     |
+
 
 
 ## Getting Started
