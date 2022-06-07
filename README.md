@@ -9,6 +9,7 @@ Bachelor's Final Year Project - IST 2021/2022
 | 96758  | Martim Tavares    | <https://github.com/MartimTavares>          | <mailto:martim.tavares@tecnico.ulisboa.pt>        |
 
 
+
 ## Getting Started
 
 The overall system is made up of several modules. The definition of the messages' headers and packets is in the _Packet_ folder. 

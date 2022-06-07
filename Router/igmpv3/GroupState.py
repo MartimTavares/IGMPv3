@@ -227,9 +227,13 @@ class GroupState:
             for source in source_adds:
                 lst_ip.append(source.getAddress())
                 
-            for s in self.source_addresses:
-                if s in lst_ip:
+            for s in lst_ip:
+                if s in self.source_addresses:
                     self.clear_source_timer(s)
+                    source_timer = Timer(MAX_RESPONSE_TIME_LAST_MEMBER_QUERY_INTERVAL, self.source_timeout, [s])
+                    source_timer.start()
+                    self.source_addresses[s] = source_timer
+                else:
                     source_timer = Timer(MAX_RESPONSE_TIME_LAST_MEMBER_QUERY_INTERVAL, self.source_timeout, [s])
                     source_timer.start()
                     self.source_addresses[s] = source_timer
