@@ -2,7 +2,8 @@
 # cp /hosthome/Desktop/IST/Ano_3/ProjInt-IGMPv3/IGMPv3/Client/ . -r
 # cd Client
 # python3 client.py
-
+# github token:
+# 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
 import socket
 import struct
 import sys

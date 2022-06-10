@@ -44,7 +44,9 @@ class RouterState(object):
         # send general query to all the routers, where S=0 | qrv=2 | QQIC=125
         packet = PacketIGMPv3HeaderQuery(0, 0, 2, 125, "0.0.0.0")
         igmp_pckt = PacketIGMPHeader(packet)
-        self.interface.send(igmp_pckt.bytes(), "224.0.0.22")
+        # The address to send should be 224.0.0.22 but
+        # kathará seems to not recognise this address
+        self.interface.send(igmp_pckt.bytes(), "224.0.0.1")
         print("/*  *  *  *  *  *  *  *  *  *  *  *  *  *  */")
         print("Current Querier IP: {}".format(self.whoIsQuerier))
         # set initial general query timer 
@@ -202,7 +204,9 @@ class RouterState(object):
             
 
     def remove_group(self, group_ip):
-        self.group_state.pop(group_ip)
+        for group in list(self.group_state):
+            if group == group_ip:
+                self.group_state.pop(group)
             
 
     def remove(self):
