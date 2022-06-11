@@ -179,6 +179,7 @@ class GroupState:
                 packet = PacketIGMPHeader(data)
                 if self.router_state.interface_state == "Querier":
                     self.router_state.interface.send(packet.bytes(), self.group_ip)
+                    print("[INFO]: A Query was sent.")
                 
             if self.filter_mode == GroupState.EXCLUDE:
                 for s in self.source_addresses:
@@ -189,6 +190,7 @@ class GroupState:
                 packet = PacketIGMPHeader(data)
                 if self.router_state.interface_state == "Querier":
                     self.router_state.interface.send(packet.bytes(), self.group_ip)
+                    print("[INFO]: A Query was sent.")
             self.set_group_timer()
         # CHANGE_TO_EXCLUDE 
         elif int(operation_type) == 4:
@@ -207,6 +209,7 @@ class GroupState:
                 packet = PacketIGMPHeader(data)
                 if self.router_state.interface_state == "Querier":
                     self.router_state.interface.send(packet.bytes(), self.group_ip)
+                    print("[INFO]: A Query was sent.")
                 self.set_group_timer()
                 self.filter_mode == GroupState.EXCLUDE
             elif self.filter_mode == GroupState.EXCLUDE:
@@ -223,6 +226,7 @@ class GroupState:
                     packet = PacketIGMPHeader(data)
                     if self.router_state.interface_state == "Querier":
                         self.router_state.interface.send(packet.bytes(), self.group_ip)
+                        print("[INFO]: A Query was sent.")
                 else:
                     for s in source_addresses:
                         if s not in self.source_addresses:
@@ -235,6 +239,7 @@ class GroupState:
                     packet = PacketIGMPHeader(data)
                     if self.router_state.interface_state == "Querier":
                         self.router_state.interface.send(packet.bytes(), self.group_ip)
+                        print("[INFO]: A Query was sent.")
                 self.set_group_timer()
 
         # BLOCK_OLD_SOURCES
@@ -250,6 +255,7 @@ class GroupState:
                     self.sources_in_risk_to_exclude.append(s)
                 packet = PacketIGMPHeader(data)
                 self.router_state.interface.send(packet.bytes(), self.group_ip)
+                print("[INFO]: A Query was sent.")
                 self.set_group_timer()
 
     #          #         #      */
